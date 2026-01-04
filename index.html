@@ -1,162 +1,97 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<title>パンチパーマおばさん大冒険</title>
-<style>
-body { margin:0; background:#222; color:#fff; font-family:sans-serif; }
-canvas { display:block; margin:0 auto; background:#87ceeb; }
-.info { text-align:center; padding:6px; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+
+  <title>パンチパーマおばさんの大冒険</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#ff66aa">
+
+  <!-- iOS対応 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      touch-action: none;
+      font-family: sans-serif;
+    }
+
+    #game {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      background: #111;
+    }
+
+    /* ローディング表示 */
+    #loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ff66aa;
+      font-size: 24px;
+      background: #000;
+      z-index: 10;
+    }
+  </style>
 </head>
+
 <body>
-<div class="info">← → 移動 / ↑ ジャンプ ｜ 🏁で復帰地点更新</div>
-<canvas id="game" width="800" height="400" tabindex="0"></canvas>
 
-<script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-canvas.focus();
+  <div id="loading">パンチパーマ装着中…</div>
 
-const gravity = 0.6;
-const worldWidth = 3000;
-let cameraX = 0;
+  <!-- Canvasゲーム想定 -->
+  <canvas id="game"></canvas>
 
-const player = {
-  x:50,y:300,w:30,h:40,
-  vx:0,vy:0,
-  speed:4,jump:12,
-  onGround:false,
-  respawnX:50,
-  respawnY:0
-};
+  <!-- ゲーム本体 -->
+  <script src="main.js"></script>
 
-const keys = {};
-const platforms = [];
-const checkpoints = [];
-
-for(let i=0;i<30;i++){
-  const x=i*120;
-  const y=360-(i%5)*40;
-  platforms.push({x,y,w:120,h:40});
-  if(i%7===0 && i!==0){
-    checkpoints.push({x:x+40,y:y-40,active:false});
-  }
-}
-
-const enemies=[];
-for(let i=1;i<8;i++){
-  enemies.push({x:280*i,y:320,w:30,h:30,vx:1.2,alive:true});
-}
-
-const demons=[];
-for(let i=1;i<=3;i++){
-  demons.push({x:700*i,baseY:180,y:180,w:40,h:40,vx:1.5,t:0,alive:true});
-}
-
-function respawn(){
-  player.x=player.respawnX;
-  player.y=player.respawnY;
-  player.vx=player.vy=0;
-}
-
-function update(){
-  player.vx = keys.ArrowLeft ? -player.speed :
-              keys.ArrowRight ? player.speed : 0;
-
-  if(keys.ArrowUp && player.onGround){
-    player.vy=-player.jump;
-    player.onGround=false;
-  }
-
-  player.vy+=gravity;
-  player.x+=player.vx;
-  player.y+=player.vy;
-  player.onGround=false;
-
-  for(const p of platforms){
-    if(player.x<p.x+p.w && player.x+player.w>p.x &&
-       player.y+player.h<p.y+player.vy+5 &&
-       player.y+player.h>p.y && player.vy>=0){
-      player.y=p.y-player.h;
-      player.vy=0;
-      player.onGround=true;
+  <!-- Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js');
+      });
     }
-  }
+  </script>
 
-  for(const c of checkpoints){
-    if(!c.active &&
-       player.x<c.x+20 && player.x+player.w>c.x &&
-       player.y<c.y+40 && player.y+player.h>c.y){
-      c.active=true;
-      player.respawnX=c.x;
-      player.respawnY=c.y;
+  <!-- フルスクリーン & 初期化 -->
+  <script>
+    const canvas = document.getElementById('game');
+    const loading = document.getElementById('loading');
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
     }
-  }
 
-  for(const e of enemies){
-    if(!e.alive)continue;
-    e.x+=e.vx;
-    if(player.x<e.x+e.w && player.x+player.w>e.x &&
-       player.y<e.y+e.h && player.y+player.h>e.y){
-      if(player.vy>0){e.alive=false;player.vy=-8;}
-      else respawn();
-    }
-  }
+    window.addEventListener('resize', resize);
+    resize();
 
-  for(const d of demons){
-    if(!d.alive)continue;
-    d.t+=0.05;
-    d.x+=d.vx;
-    d.y=d.baseY+Math.sin(d.t)*30;
-    if(player.x<d.x+d.w && player.x+player.w>d.x &&
-       player.y<d.y+d.h && player.y+player.h>d.y){
-      if(player.vy>0 && player.y+player.h-d.y<15){
-        d.alive=false; player.vy=-10;
-      } else respawn();
-    }
-  }
+    // ゲーム準備完了後に呼ぶ想定
+    window.gameReady = function () {
+      loading.style.display = 'none';
+    };
 
-  cameraX=Math.max(0,Math.min(player.x-200,worldWidth-canvas.width));
-}
+    // iOS対策：初回タップでフルスクリーン
+    document.addEventListener('touchstart', () => {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    }, { once: true });
+  </script>
 
-function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  for(const p of platforms){
-    ctx.fillStyle="#654321";
-    ctx.fillRect(p.x-cameraX,p.y,p.w,p.h);
-  }
-
-  for(const c of checkpoints){
-    ctx.fillStyle=c.active?"#00ff00":"#ffff00";
-    ctx.fillRect(c.x-cameraX,c.y,20,40);
-  }
-
-  for(const e of enemies){
-    if(e.alive){
-      ctx.fillStyle="#800000";
-      ctx.fillRect(e.x-cameraX,e.y,e.w,e.h);
-    }
-  }
-
-  for(const d of demons){
-    if(!d.alive)continue;
-    ctx.fillStyle="#550000";
-    ctx.fillRect(d.x-cameraX,d.y,d.w,d.h);
-    ctx.fillStyle="#ff0000";
-    ctx.fillRect(d.x-cameraX+8,d.y+12,6,6);
-    ctx.fillRect(d.x-cameraX+d.w-14,d.y+12,6,6);
-  }
-
-  ctx.fillStyle="#ff69b4";
-  ctx.fillRect(player.x-cameraX,player.y+10,player.w,player.h-10);
-}
-
-function loop(){update();draw();requestAnimationFrame(loop);}
-window.addEventListener("keydown",e=>keys[e.key]=true);
-window.addEventListener("keyup",e=>keys[e.key]=false);
-loop();
-</script>
 </body>
 </html>
